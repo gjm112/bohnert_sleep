@@ -12,7 +12,6 @@ dat <- read.csv("/Users/gregorymatthews/Dropbox/bohnert_sleep/CL_OTR_COI_Data.cs
 dat %>% group_by(ID) %>% summarize(n = n()) %>% arrange(-n)
 dat %>% filter(ID == 2561) %>% View()
 
-
 #Remove ID's that are NA
 dat <- dat %>% filter(!is.na(ID))
 
@@ -29,15 +28,9 @@ dat <- dat %>% mutate(gender.v1 = case_when(gender.v1 == 1 ~ "male",
 
 
 
-#Mean age
-mean(dat$age.v1, na.rm = TRUE)
-#Percentage Female
-mean(dat$pdsMF.v1 == "female", na.rm = TRUE)
-
 dat %>% summarize(mean_age = mean(age.v1, na.rm = T),
                   pct_female = mean(pdsMF.v1 == "female", na.rm = T),
                   mean_income = mean(income.v1, na.rm= T)) 
-
 
 #ggplots for age and income
 ggplot(aes(x = age.v1), data = dat) + geom_bar() + theme_bw() 
@@ -65,8 +58,6 @@ dat %>% filter(act_patotaldays >=5 & !is.na(age.v1)) %>% nrow()
 #Reproducing Table 1 stuff
 dat %>% filter(act_patotaldays >=5 ) %>% group_by(gender.v1) %>% summarize(age = mean(age.v1),
                                                                            n = n())
-
-
 dat  %>% group_by(gender.v1) %>% summarize(age = mean(age.v1),
                                            n = n(), 
                                            sleep = mean(act_totsleep.min_avg, na.rm = T),
@@ -74,18 +65,7 @@ dat  %>% group_by(gender.v1) %>% summarize(age = mean(age.v1),
                                            onset = mean(act_onset.time.min_d0, na.rm = T),
                                            eff = mean(act_efficiency_avg, na.rm = T))
                                                                           
-##test 
-test <- dat %>%
-  select(ID, gender.v1, 
-         act_inbed.time_d0:act_inbed.time_d8,
-         act_weekday_yn_d0:act_weekday_yn_d8,
-         act_onset.time_d0: act_onset.time_d8) %>%
-  pivot_longer(
-    cols = -c(ID,gender.v1),
-    cols_vary = "slowest",
-    names_to = c(".value","day"),
-    names_pattern = "(.*)_d(.*)"
-  ) 
+
 
 # cols = c(x1, x2, x3, y1, y2, y3),
 # cols_vary = "slowest",
@@ -123,8 +103,7 @@ datinbedmean <- datinbed %>% group_by(gender.v1) %>% summarize(mean_x = mean(inb
                                                               mean_y = mean(inbed.time_angle_y, na.rm = T),
                                                n = n()) %>% mutate(mean_angle = atan(mean_y/mean_x),
                                                                    mean_time = mean_angle/(2*pi)*24,
-                                                                   mean_x_uc = cos(mean_angle),
-                                                                    mean_y_uc = sin(mean_angle))
+                                                                   mean_x_uc = cos(mean_angle),                                                            mean_y_uc = sin(mean_angle))
 datinbedmean
 ggplot(
   aes(
@@ -168,7 +147,19 @@ ggplot(
   # -act_totsleep.min_sd
   # -act.outbed.time.min_sd
   # -act.onset.time_min.sd
-
+##test
+#Pivoting longer example:
+# test <- dat %>%
+#   select(ID, gender.v1, 
+#          act_inbed.time_d0:act_inbed.time_d8,
+#          act_weekday_yn_d0:act_weekday_yn_d8,
+#          act_onset.time_d0: act_onset.time_d8) %>%
+#   pivot_longer(
+#     cols = -c(ID,gender.v1),
+#     cols_vary = "slowest",
+#     names_to = c(".value","day"),
+#     names_pattern = "(.*)_d(.*)"
+#   ) 
 ################
 #Total Sleep
 ################z_ED_nat; z_HE_nat; z_SE_nat
@@ -185,15 +176,37 @@ datlong_resp <- dat %>%
     z_ED_nat,
     z_HE_nat,
     z_SE_nat,
-    act_totsleep.min_d0:act_totsleep.min_d8
-  ) %>%
+    z_ED_EC_nat,
+    z_ED_EL_nat,
+    z_ED_ER_nat,
+    z_ED_SP_nat,
+    act_totsleep.min_d0:act_totsleep.min_d8,
+    act_outbed.time_d0:act_outbed.time_d8,
+    act_onset.time_d0: act_onset.time_d8,
+    act_efficiency_d0: act_efficiency_d8,
+    act_weekday_yn_d0:act_weekday_yn_d8,
+    act_awakening.min_d0: act_awakening.min_d8) %>%
   pivot_longer(
-    cols = starts_with("act_totsleep.min_d"),
-    names_prefix = "act_totsleep.min_d",
-    names_to = c("day"),
-    values_to = "totsleep_min"
+    cols = -c(ID,
+              RecordedDate,
+              pdsMF.v1,
+              cg1.age.v1,
+              income.v1,
+              cg1_edu_grp,
+              z_COI_nat,
+              z_ED_nat,
+              z_HE_nat,
+              z_SE_nat,
+              z_ED_EC_nat,
+              z_ED_EL_nat,
+              z_ED_ER_nat,
+              z_ED_SP_nat),
+    cols_vary = "slowest",
+    names_to = c(".value","day"),
+    names_pattern = "(.*)_d(.*)"
   )
-  
+
+
 datlong_weekday_yn <- dat %>% 
   filter(act_patotaldays >=5 & gender.v1 %in% c("male","female") ) %>% 
   select(ID, pdsMF.v1, cg1.age.v1,income.v1,cg1.edu.deg.v1, act_weekday_yn_d0:act_weekday_yn_d8) %>% 
@@ -212,21 +225,25 @@ library(lme4)
 ################################
 #Model 1: COI Total
 ################################
-mod1_totsleep <- lmer(totsleep_min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
+mod1_totsleep <- lmer(act_totsleep.min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
 summary(mod1_totsleep)
 confint(mod1_totsleep)
+plot(mod1_totsleep)
 
 ################################
 #Model 2: COI Sub-domains
 ################################
-mod2_totsleep <- lmer(totsleep_min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp +  z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
+mod2_totsleep <- lmer(act_totsleep.min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
 summary(mod2_totsleep)
 confint(mod2_totsleep)
+plot(mod2_totsleep)
 
 ################################
-#Model 2: COI Sub-domains
+#Model 3: COI Sub-domains
 ################################
-mod2_totsleep <- lmer(totsleep_min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp +  z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
-summary(mod2_totsleep)
+mod3_totsleep <- lmer(act_totsleep.min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp + z_ED_EC_nat + z_ED_EL_nat + z_ED_ER_nat + z_ED_SP_nat + (1|ID)  , data = datlong)
+summary(mod3_totsleep)
+confint(mod3_totsleep)
+plot(mod3_totsleep)
 
 

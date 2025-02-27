@@ -1,0 +1,433 @@
+---
+title: "Sleep Study - Amy Bohnert - 2/27/2025"
+format: pdf
+editor: visual
+---
+
+
+
+```{r}
+#Description of the models is here:
+#https://docs.google.com/document/d/1wPBOgAGN5HowoabC0F4LSJFSpuju6Igh/edit
+
+#Understanding geoids
+#https://www.census.gov/programs-surveys/geography/guidance/geo-identifiers.html
+
+library(foreign)
+library(tidyverse)
+library(lattice)
+library(lcsm)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(stringr)
+
+#ID 2561 was on two rows.  It seems very clear that this should only have been one row.  
+dat <- read.csv("/Users/gregorymatthews/Dropbox/bohnert_sleep/CL_OTR_COI_Data.csv")
+```
+
+# Data Cleaning and EDA
+ - Observation ID 2561 had two rows in the data set.  I removed one of these rows.  
+
+```{r}
+#EDA
+#ID 2561 is a problem
+#dat %>% group_by(ID) %>% summarize(n = n()) %>% arrange(-n)
+dat %>% filter(ID == 2561) %>% select(RecordedDate, ID, age.v1, gender.v1)
+
+#Remove ID's that are NA
+dat <- dat %>% filter(!is.na(ID))
+
+#ID 2561 has two rows
+#Fixing this here: 
+dat[dat$ID == 2561 &
+      is.na(dat$age.v1), c("age.v1", "age_dichotomous", "gender.v1")] <- 
+  dat[dat$ID == 2561 & !is.na(dat$age.v1), c("age.v1", "age_dichotomous", "gender.v1")]
+dat <- dat[dat$ID != 2561 |
+             (dat$ID == 2561 & !is.na(dat$RecordedDate)), ]
+
+#Convert gender 1/2 to male/female
+dat <- dat %>% mutate(
+  gender.v1 = case_when(gender.v1 == 1 ~ "male", gender.v1 == 2 ~ "female"),
+  pdsMF.v1 = case_when(pdsMF.v1 == 1 ~ "male", pdsMF.v1 == 2 ~ "female")
+)
+
+
+```
+
+
+##  Summary stats
+
+
+```{r}
+dat %>% summarize(
+  mean_age = mean(age.v1, na.rm = T),
+  pct_female = mean(pdsMF.v1 == "female", na.rm = T),
+  mean_income = mean(income.v1, na.rm = T)
+)
+
+#ggplots for age and income
+ggplot(aes(x = age.v1), data = dat) + geom_bar() + theme_bw()
+ggplot(aes(x = age.v1, fill = pdsMF.v1), data = dat %>% filter(pdsMF.v1 %in% c("male","female"))) + geom_bar() + theme_bw() + facet_grid( pdsMF.v1 ~ 1)
+
+ggplot(aes(x = income.v1), data = dat) + geom_histogram() + theme_bw() + geom_vline(aes(xintercept = median(dat$income, na.rm = TRUE)), color = "red") + ggtitle("Red line = Median")
+
+ggplot(aes(x = cg1.edu.deg.v1), data = dat) + geom_bar() + theme_bw()
+
+dat <- dat %>% mutate(cg1_edu_grp = factor(
+  case_when(
+    cg1.edu.deg.v1 %in% c(1, 2, 3) ~ "<=HS",
+    cg1.edu.deg.v1 %in% c(4, 5, 6) ~ "<=BS",
+    cg1.edu.deg.v1 %in% c(7, 8) ~ ">=MS"
+  )
+))
+
+dat <- dat %>% mutate(cg1_edu_grp = fct_relevel(cg1_edu_grp, c("<=HS", "<=BS", ">=MS")))
+ggplot(aes(x = cg1_edu_grp), data = dat) + geom_bar() + theme_bw()
+
+ggplot(aes(x = cg1_edu_grp, fill = pdsMF.v1), data = dat %>% filter(pdsMF.v1 %in% c("male","female"))) + geom_bar() + theme_bw() + facet_grid( pdsMF.v1 ~ 1)
+
+#need at least 5 days of actigraph data
+table(dat$act_patotaldays)
+#254+55+15 = 324
+
+#I get 324
+dat %>% filter(act_patotaldays >= 5 ) %>% nrow()
+
+#Reproducing Table 1 stuff
+dat %>% filter(act_patotaldays >= 5) %>% group_by(gender.v1) %>% summarize(age = mean(age.v1), n = n())
+
+dat  %>% group_by(gender.v1) %>% summarize(
+  age = mean(age.v1),
+  n = n(),
+  sleep = mean(act_totsleep.min_avg, na.rm = T),
+  inbed = mean(act_totinbed.min_avg, na.rm = T),
+  onset = mean(act_onset.time.min_d0, na.rm = T),
+  eff = mean(act_efficiency_avg, na.rm = T)
+)
+
+
+#Average inbed time is a problem because times are circular
+datinbed <- dat %>%
+  select(ID, gender.v1, act_inbed.time_d0:act_inbed.time_d8) %>%
+  pivot_longer(
+    cols = starts_with("act_inbed.time_d"),
+    names_prefix = "act_inbed.time_d",
+    names_to = c("day"),
+    values_to = "act_inbed_time"
+  ) %>% mutate(act_inbed_time_numeric = as.numeric(do.call(rbind, strsplit(act_inbed_time, ":"))[, 1]) + as.numeric(do.call(rbind, strsplit(act_inbed_time, ":"))[, 2]) / 60,
+               inbed.time_angle = 2*pi*act_inbed_time_numeric/24, 
+               inbed.time_angle_x = cos(inbed.time_angle) ,
+               inbed.time_angle_y = sin(inbed.time_angle),
+               ) 
+
+datweekend_yn <- dat %>%
+  select(ID, act_weekday_yn_d0:act_weekday_yn_d8) %>%
+  pivot_longer(
+    cols = starts_with("act_weekday_yn_d"),
+    names_to = c("day"),
+    values_to = "act_weekday_yn",
+    names_prefix = "act_weekday_yn_d",
+  ) 
+
+datinbed <- datinbed %>% left_join(datweekend_yn, by = c("ID","day"))
+
+datinbedmean <- datinbed %>% group_by(gender.v1) %>% summarize(mean_x = mean(inbed.time_angle_x, na.rm = T),
+mean_y = mean(inbed.time_angle_y, na.rm = T),n = n()) %>% mutate(mean_angle = atan(mean_y/mean_x),mean_time = mean_angle/(2*pi)*24, mean_x_uc = cos(mean_angle),  mean_y_uc = sin(mean_angle))
+
+datinbedmean
+ggplot(
+  aes(
+    x = inbed.time_angle_x,
+    y = -inbed.time_angle_y,
+    color = as.factor(gender.v1)
+  ),
+  data = datinbed %>% filter(gender.v1 %in% c("male", "female"))
+) + geom_point(alpha = 0.05, size = 2) + coord_fixed() + facet_grid( ~ gender.v1) + geom_point(
+  aes(x = mean_x_uc, y = -mean_y_uc),
+  color = "red",
+  data = datinbedmean %>% filter(gender.v1 %in% c("male", "female"))
+) + geom_segment(x = 0,
+                 y = 0,
+                 xend = 1,
+                 yend = 0) + geom_text(x = 0.5, y = 0.1, label = "0:00") + 
+   geom_segment(x = 0,
+                 y = 0,
+                 xend = -1,
+                 yend = 0) + geom_text(x = -0.5, y = 0.1, label = "12:00") + 
+  geom_segment(x = 0,
+               y = 0,
+               xend = 0,
+               yend = -1) + geom_text(x = 0.1, y = -0.5, label = "06:00", angle = -90) + 
+  geom_segment(x = 0,
+               y = 0,
+               xend = 0,
+               yend = 1) + geom_text(x = 0.1, y = 0.5, label = "18:00", angle = 90)
+
+
+
+#Pivot longer
+#DVs (sleep variables with models run for each sleep DV: 8 total):
+# -act_totsleep.min
+# -act.outbed.time
+# -act.onset.time
+# -act_efficiency
+# -act_awakening.min
+#Weekly level:
+#Variability in:
+  # -act_totsleep.min_sd
+  # -act.outbed.time.min_sd
+  # -act.onset.time_min.sd
+##test
+#Pivoting longer example:
+# test <- dat %>%
+#   select(ID, gender.v1, 
+#          act_inbed.time_d0:act_inbed.time_d8,
+#          act_weekday_yn_d0:act_weekday_yn_d8,
+#          act_onset.time_d0: act_onset.time_d8) %>%
+#   pivot_longer(
+#     cols = -c(ID,gender.v1),
+#     cols_vary = "slowest",
+#     names_to = c(".value","day"),
+#     names_pattern = "(.*)_d(.*)"
+#   ) 
+################
+#Total Sleep
+################z_ED_nat; z_HE_nat; z_SE_nat
+datlong_resp <- dat %>%
+  filter(act_patotaldays >= 5 & gender.v1 %in% c("male","female")) %>%
+  select(
+    ID,
+    RecordedDate,
+    pdsMF.v1,
+    cg1.age.v1,
+    income.v1,
+    cg1_edu_grp,
+    z_COI_nat,
+    z_ED_nat,
+    z_HE_nat,
+    z_SE_nat,
+    z_ED_EC_nat,
+    z_ED_EL_nat,
+    z_ED_ER_nat,
+    z_ED_SP_nat,
+    act_totsleep.min_d0:act_totsleep.min_d8,
+    act_outbed.time_d0:act_outbed.time_d8,
+    act_onset.time_d0: act_onset.time_d8,
+    act_efficiency_d0: act_efficiency_d8,
+    act_weekday_yn_d0:act_weekday_yn_d8,
+    act_awakening.min_d0: act_awakening.min_d8) %>%
+  pivot_longer(
+    cols = -c(ID,
+              RecordedDate,
+              pdsMF.v1,
+              cg1.age.v1,
+              income.v1,
+              cg1_edu_grp,
+              z_COI_nat,
+              z_ED_nat,
+              z_HE_nat,
+              z_SE_nat,
+              z_ED_EC_nat,
+              z_ED_EL_nat,
+              z_ED_ER_nat,
+              z_ED_SP_nat),
+    cols_vary = "slowest",
+    names_to = c(".value","day"),
+    names_pattern = "(.*)_d(.*)"
+  )
+
+
+datlong_weekday_yn <- dat %>% 
+  filter(act_patotaldays >=5 & gender.v1 %in% c("male","female") ) %>% 
+  select(ID, pdsMF.v1, cg1.age.v1,income.v1,cg1.edu.deg.v1, act_weekday_yn_d0:act_weekday_yn_d8) %>% 
+  pivot_longer(cols = starts_with("act_weekday_yn_d"), names_prefix = "act_weekday_yn_d",names_to = c("day"), values_to = "weekday_yn") 
+
+
+#Weekend indicator should be Fri/Sat instead of a weekend (Sat/Sun) indicator
+datlong <- datlong_resp %>% left_join(datlong_weekday_yn %>% select(ID,day,weekday_yn), by = c("ID","day"))
+datlong <- datlong %>% group_by(ID) %>% mutate(I_frisat =  1 - lead(weekday_yn))
+datlong <- datlong %>% group_by(ID) %>% mutate(I_frisat = ifelse(is.na(I_frisat),lag(I_frisat,7),I_frisat))
+#datlong$Date <- do.call(rbind,strsplit(datlong$RecordedDate," "))[,1]
+#datlong$Date <- mdy(datlong$Date)
+#datlong$dayofweek <- wday(datlong$Date)
+
+```
+
+# Models 
+## Total Sleep
+
+```{r}
+ggplot(aes(x = day, y = act_totsleep.min, group = ID, color = pdsMF.v1), data = datlong %>% filter(pdsMF.v1 %in% c("male","female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~pdsMF.v1)
+```
+
+```{r}
+library(lme4)
+################################
+#act_totalsleep.min
+################################
+################################
+#Model 1: COI Total
+################################
+mod1_totsleep <- lmer(act_totsleep.min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
+summary(mod1_totsleep)
+confint(mod1_totsleep)
+
+plot(mod1_totsleep, type=c("p","smooth"), col.line=1)
+
+plot(mod1_totsleep,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod1_totsleep)
+
+
+################################
+#Model 2: COI Sub-domains
+################################
+
+mod2_totsleep <- lmer(act_totsleep.min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
+summary(mod2_totsleep)
+confint(mod2_totsleep)
+
+plot(mod2_totsleep, type=c("p","smooth"), col.line=1)
+
+plot(mod2_totsleep,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod2_totsleep)
+
+
+################################
+#Model 3: COI Sub-domains
+################################
+mod3_totsleep <- lmer(act_totsleep.min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp + z_ED_EC_nat + z_ED_EL_nat + z_ED_ER_nat + z_ED_SP_nat + (1|ID)  , data = datlong)
+summary(mod3_totsleep)
+confint(mod3_totsleep)
+plot(mod3_totsleep, type=c("p","smooth"), col.line=1)
+
+plot(mod3_totsleep,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod3_totsleep)
+```
+
+
+## Sleep Efficiency
+
+```{r}
+ggplot(aes(x = day, y = act_efficiency, group = ID, color = pdsMF.v1), data = datlong %>% filter(pdsMF.v1 %in% c("male","female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~pdsMF.v1)
+```
+
+```{r}
+library(lme4)
+################################
+#act_efficiency
+################################
+################################
+#Model 1: COI Total
+################################
+mod1_eff <- lmer(act_efficiency ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
+summary(mod1_eff)
+confint(mod1_eff)
+
+plot(mod1_eff, type=c("p","smooth"), col.line=1)
+
+plot(mod1_eff,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod1_eff)
+
+
+################################
+#Model 2: COI Sub-domains
+################################
+mod2_eff <- lmer(act_efficiency ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
+summary(mod2_eff)
+confint(mod2_eff)
+
+plot(mod2_eff, type=c("p","smooth"), col.line=1)
+
+plot(mod2_eff,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod2_eff)
+
+
+################################
+#Model 3: COI Sub-domains
+################################
+mod3_eff <- lmer(act_efficiency ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp + z_ED_EC_nat + z_ED_EL_nat + z_ED_ER_nat + z_ED_SP_nat + (1|ID)  , data = datlong)
+summary(mod3_eff)
+confint(mod3_eff)
+plot(mod3_eff, type=c("p","smooth"), col.line=1)
+
+plot(mod3_eff,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod3_eff)
+```
+
+
+## Awakening
+
+```{r}
+ggplot(aes(x = day, y = act_awakening.min, group = ID, color = pdsMF.v1), data = datlong %>% filter(pdsMF.v1 %in% c("male","female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~pdsMF.v1)
+```
+
+```{r}
+library(lme4)
+################################
+#act_awakening.min
+################################
+################################
+#Model 1: COI Total
+################################
+mod1_awake <- lmer(act_awakening.min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
+summary(mod1_awake)
+confint(mod1_awake)
+
+plot(mod1_awake, type=c("p","smooth"), col.line=1)
+
+plot(mod1_awake,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod1_awake)
+
+
+################################
+#Model 2: COI Sub-domains
+################################
+mod2_awake <- lmer(act_awakening.min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
+summary(mod2_awake)
+confint(mod2_awake)
+
+plot(mod2_awake, type=c("p","smooth"), col.line=1)
+
+plot(mod2_awake,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod2_awake)
+
+
+################################
+#Model 3: COI Sub-domains
+################################
+mod3_awake <- lmer(act_awakening.min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp + z_ED_EC_nat + z_ED_EL_nat + z_ED_ER_nat + z_ED_SP_nat + (1|ID)  , data = datlong)
+summary(mod3_awake)
+confint(mod3_awake)
+plot(mod3_awake, type=c("p","smooth"), col.line=1)
+
+plot(mod3_awake,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod3_awake)
+```
