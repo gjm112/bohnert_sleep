@@ -7,7 +7,7 @@ library(tidyverse)
 #ID 2561 was on two rows.  It seems very clear that this should only have been one row.  
 dat <- read.csv("/Users/gregorymatthews/Dropbox/bohnert_sleep/CL_OTR_COI_Data.csv")
 
-#EDA 
+#EDA and data cleaning
 #ID 2561 is a problem
 dat %>% group_by(ID) %>% summarize(n = n()) %>% arrange(-n)
 dat %>% filter(ID == 2561) %>% View()
@@ -221,6 +221,30 @@ datlong <- datlong %>% group_by(ID) %>% mutate(I_frisat = ifelse(is.na(I_frisat)
 #datlong$Date <- mdy(datlong$Date)
 #datlong$dayofweek <- wday(datlong$Date)
 
+
+#Fix time formating
+#I cut off the day at 3pm. We could choose a different cut off
+datlong <- datlong %>% ungroup() %>% mutate(
+act_outbed.time_numeric = as.numeric(do.call(rbind,strsplit(datlong$act_outbed.time,":"))[,1]) + as.numeric(do.call(rbind,strsplit(datlong$act_outbed.time,":"))[,2])/60,
+act_onset.time_numeric = as.numeric(do.call(rbind,strsplit(datlong$act_onset.time,":"))[,1]) + as.numeric(do.call(rbind,strsplit(datlong$act_onset.time,":"))[,2])/60) %>% 
+  mutate(act_onset.time_numeric = ifelse(act_onset.time_numeric >= 17,act_onset.time_numeric-24,act_onset.time_numeric))
+
+datlong %>% group_by(I_frisat, pdsMF.v1) %>% 
+  summarize(onset_mean = mean(act_onset.time_numeric, na.rm = T),
+            outbed_mean = mean(act_outbed.time_numeric, na.rm = T))
+
+ggplot(aes(x = act_onset.time_numeric,
+           y = act_outbed.time_numeric,
+           color = pdsMF.v1), data = datlong) + geom_point() + theme_bw() + facet_grid(~I_frisat)
+
+ggplot(aes(y = act_onset.time_numeric,
+           color = as.factor(I_frisat)), data = datlong) + geom_boxplot() + theme_bw() + facet_grid(~pdsMF.v1)
+
+ggplot(aes(y = act_outbed.time_numeric,
+           color = as.factor(I_frisat)), data = datlong) + geom_boxplot() + theme_bw() + facet_grid(~pdsMF.v1)
+
+
+  
 library(lme4)
 ################################
 #Model 1: COI Total
