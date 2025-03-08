@@ -180,6 +180,7 @@ datlong_resp <- dat %>%
     z_ED_EL_nat,
     z_ED_ER_nat,
     z_ED_SP_nat,
+    geoid20,
     act_totsleep.min_d0:act_totsleep.min_d8,
     act_outbed.time_d0:act_outbed.time_d8,
     act_onset.time_d0: act_onset.time_d8,
@@ -200,7 +201,8 @@ datlong_resp <- dat %>%
               z_ED_EC_nat,
               z_ED_EL_nat,
               z_ED_ER_nat,
-              z_ED_SP_nat),
+              z_ED_SP_nat, 
+              geoid20),
     cols_vary = "slowest",
     names_to = c(".value","day"),
     names_pattern = "(.*)_d(.*)"
@@ -249,7 +251,7 @@ library(lme4)
 ################################
 #Model 1: COI Total
 ################################
-mod1_totsleep <- lmer(act_totsleep.min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
+mod1_totsleep <- lmer(act_totsleep.min ~ pdsMF.v1 + cg1.age.v1 + I(income.v1/10000) + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID) + (1|geoid20) , data = datlong)
 summary(mod1_totsleep)
 confint(mod1_totsleep)
 plot(mod1_totsleep)

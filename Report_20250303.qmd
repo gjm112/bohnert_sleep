@@ -5,7 +5,6 @@ editor: visual
 ---
 
 
-
 ```{r}
 #Description of the models is here:
 #https://docs.google.com/document/d/1wPBOgAGN5HowoabC0F4LSJFSpuju6Igh/edit
@@ -27,17 +26,29 @@ library(MuMIn)
 
 #ID 2561 was on two rows.  It seems very clear that this should only have been one row.  
 dat <- read.csv("../bohnert_sleep/CL_OTR_COI_Data.csv")
-dat2 <- read.csv("../bohnert_sleep/CL_OTR v1 Youth Baseline COI3 Actigraphy Demo.csv")
+#dat2 <- read.csv("../bohnert_sleep/CL_OTR v1 Youth Baseline COI3 Actigraphy Demo.csv")
 
 #Merge this on to get community area in chicago
 #File url is here: https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Census-Tracts-2010/5jrd-6zik
 commu_area <- read.csv("../bohnert_sleep/CensusTractsTIGER2010_20250303_small.csv")
 
-dat_neigh <- as.data.frame(read.spss("../bohnert_sleep/CL_OTR v1 Youth and Parent Baseline, All COI3, Actig - no address.sav"))
+#dat_neigh <- as.data.frame(read.spss("../bohnert_sleep/CL_OTR v1 Youth and Parent Baseline, All COI3, Actig - no address.sav"))
+#write.csv(dat_neigh %>% select(famid, ID, p.mn.cohesion.mean.v1, p.mn.safety.mean.v1, p.mn.violence.mean.v1), file = "../bohnert_sleep/CL_OTR_COI_Data_neighborhood.csv", row.names = FALSE)
+
+dat_neigh <- read.csv("../bohnert_sleep/CL_OTR_COI_Data_neighborhood.csv")
+
+dat <- dat %>% left_join(dat_neigh, by = "ID")
 ```
 
-test <- dat %>% left_join(commu_area, by = c("geoid20" = "GEOID10"))
+```{r}
+dat <- dat %>% left_join(commu_area, by = c("geoid20" = "GEOID10"))
 
+
+dat <- dat %>% mutate(COMMAREA = ifelse(is.na(COMMAREA),0,COMMAREA))
+
+table(dat$COMMAREA)
+sum(is.na(dat$COMMAREA))
+```
 # Data Cleaning and EDA
  - Observation ID 2561 had two rows in the data set.  I removed one of these rows.  
 
@@ -60,8 +71,8 @@ dat <- dat[dat$ID != 2561 |
 
 #Convert gender 1/2 to male/female
 dat <- dat %>% mutate(
-  gender.v1 = case_when(gender.v1 == 1 ~ "male", gender.v1 == 2 ~ "female"),
-  pdsMF.v1 = case_when(pdsMF.v1 == 1 ~ "male", pdsMF.v1 == 2 ~ "female")
+  gender.v1 = case_when(gender.v1 == 1 ~ "Male",
+            gender.v1 == 2 ~ "Female")
 )
 
 
@@ -74,18 +85,20 @@ dat <- dat %>% mutate(
 ```{r}
 dat %>% summarize(
   mean_age = mean(age.v1, na.rm = T),
-  pct_female = mean(pdsMF.v1 == "female", na.rm = T),
+  pct_female = mean(gender.v1 == "Female", na.rm = T),
   mean_income = mean(income.v1, na.rm = T)
 )
 
 #ggplots for age and income
 ggplot(aes(x = age.v1), data = dat) + geom_bar() + theme_bw()
-ggplot(aes(x = age.v1, fill = pdsMF.v1), data = dat %>% filter(pdsMF.v1 %in% c("male","female"))) + geom_bar() + theme_bw() + facet_grid( pdsMF.v1 ~ 1)
+ggplot(aes(x = age.v1, fill = gender.v1), data = dat %>% filter(gender.v1 %in% c("Male","Female"))) + geom_bar() + theme_bw() + facet_grid( gender.v1 ~ 1)
 
-ggplot(aes(x = income.v1), data = dat) + geom_histogram() + theme_bw() + geom_vline(aes(xintercept = median(dat$income, na.rm = TRUE)), color = "red") + ggtitle("Red line = Median")
+ggplot(aes(x = income.v1), data = dat) + geom_histogram() + theme_bw() + geom_vline(aes(xintercept = median(dat$income.v1, na.rm = TRUE)), color = "red") + ggtitle("Red line = Median")
 
 ggplot(aes(x = cg1.edu.deg.v1), data = dat) + geom_bar() + theme_bw()
 
+
+dat$cg1.edu.deg.v1 <- as.numeric(dat$cg1.edu.deg.v1)
 dat <- dat %>% mutate(cg1_edu_grp = factor(
   case_when(
     cg1.edu.deg.v1 %in% c(1, 2, 3) ~ "<=HS",
@@ -97,7 +110,7 @@ dat <- dat %>% mutate(cg1_edu_grp = factor(
 dat <- dat %>% mutate(cg1_edu_grp = fct_relevel(cg1_edu_grp, c("<=HS", "<=BS", ">=MS")))
 ggplot(aes(x = cg1_edu_grp), data = dat) + geom_bar() + theme_bw()
 
-ggplot(aes(x = cg1_edu_grp, fill = pdsMF.v1), data = dat %>% filter(pdsMF.v1 %in% c("male","female"))) + geom_bar() + theme_bw() + facet_grid( pdsMF.v1 ~ 1)
+ggplot(aes(x = cg1_edu_grp, fill = gender.v1), data = dat %>% filter(gender.v1 %in% c("Male","Female"))) + geom_bar() + theme_bw() + facet_grid( gender.v1 ~ 1)
 
 #need at least 5 days of actigraph data
 table(dat$act_patotaldays)
@@ -154,11 +167,11 @@ ggplot(
     y = -inbed.time_angle_y,
     color = as.factor(gender.v1)
   ),
-  data = datinbed %>% filter(gender.v1 %in% c("male", "female"))
+  data = datinbed %>% filter(gender.v1 %in% c("Male", "Female"))
 ) + geom_point(alpha = 0.05, size = 2) + coord_fixed() + facet_grid( ~ gender.v1) + geom_point(
   aes(x = mean_x_uc, y = -mean_y_uc),
   color = "red",
-  data = datinbedmean %>% filter(gender.v1 %in% c("male", "female"))
+  data = datinbedmean %>% filter(gender.v1 %in% c("Male", "Female"))
 ) + geom_segment(x = 0,
                  y = 0,
                  xend = 1,
@@ -207,12 +220,12 @@ ggplot(
 #Total Sleep
 ################z_ED_nat; z_HE_nat; z_SE_nat
 datlong_resp <- dat %>%
-  filter(act_patotaldays >= 5 & gender.v1 %in% c("male","female")) %>%
+  filter(act_patotaldays >= 5 & gender.v1 %in% c("Male","Female")) %>%
   select(
     ID,
     RecordedDate,
-    pdsMF.v1,
-    cg1.age.v1,
+    gender.v1,
+    age.v1,
     income.v1,
     cg1_edu_grp,
     z_COI_nat,
@@ -233,6 +246,10 @@ datlong_resp <- dat %>%
     z_SE_HQ_nat,
     z_SE_SR_nat,
     z_SE_WL_nat,
+    p.mn.cohesion.mean.v1,
+    p.mn.safety.mean.v1,
+    p.mn.violence.mean.v1,
+    COMMAREA,
     act_totsleep.min_d0:act_totsleep.min_d8,
     act_outbed.time_d0:act_outbed.time_d8,
     act_onset.time_d0: act_onset.time_d8,
@@ -242,8 +259,8 @@ datlong_resp <- dat %>%
   pivot_longer(
     cols = -c(ID,
               RecordedDate,
-              pdsMF.v1,
-              cg1.age.v1,
+              gender.v1,
+              age.v1,
               income.v1,
               cg1_edu_grp,
               z_COI_nat,
@@ -263,7 +280,11 @@ datlong_resp <- dat %>%
     z_SE_ER_nat,
     z_SE_HQ_nat,
     z_SE_SR_nat,
-    z_SE_WL_nat),
+    z_SE_WL_nat,
+    p.mn.cohesion.mean.v1,
+    p.mn.safety.mean.v1,
+    p.mn.violence.mean.v1,
+    COMMAREA),
     cols_vary = "slowest",
     names_to = c(".value","day"),
     names_pattern = "(.*)_d(.*)"
@@ -271,8 +292,8 @@ datlong_resp <- dat %>%
 
 
 datlong_weekday_yn <- dat %>% 
-  filter(act_patotaldays >=5 & gender.v1 %in% c("male","female") ) %>% 
-  select(ID, pdsMF.v1, cg1.age.v1,income.v1,cg1.edu.deg.v1, act_weekday_yn_d0:act_weekday_yn_d8) %>% 
+  filter(act_patotaldays >=5 & gender.v1 %in% c("Male","Female") ) %>% 
+  select(ID, gender.v1, age.v1,income.v1,cg1.edu.deg.v1, act_weekday_yn_d0:act_weekday_yn_d8) %>% 
   pivot_longer(cols = starts_with("act_weekday_yn_d"), names_prefix = "act_weekday_yn_d",names_to = c("day"), values_to = "weekday_yn") 
 
 
@@ -298,26 +319,26 @@ act_onset.time_numeric = as.numeric(do.call(rbind,strsplit(datlong$act_onset.tim
 
 datlong <- datlong %>% mutate(income.v1.10000 = income.v1 / 10000)
 
-datlong %>% group_by(I_frisat, pdsMF.v1) %>% 
+datlong %>% group_by(I_frisat, gender.v1) %>% 
   summarize(onset_mean = mean(act_onset.time_numeric, na.rm = T),
             outbed_mean = mean(act_outbed.time_numeric, na.rm = T))
 
 ggplot(aes(x = act_onset.time_numeric,
            y = act_outbed.time_numeric,
-           color = pdsMF.v1), data = datlong) + geom_point() + theme_bw() + facet_grid(~I_frisat)
+           color = gender.v1), data = datlong) + geom_point() + theme_bw() + facet_grid(~I_frisat)
 
 ggplot(aes(y = act_onset.time_numeric,
-           color = as.factor(I_frisat)), data = datlong) + geom_boxplot() + theme_bw() + facet_grid(~pdsMF.v1)
+           color = as.factor(I_frisat)), data = datlong) + geom_boxplot() + theme_bw() + facet_grid(~gender.v1)
 
 ggplot(aes(y = act_outbed.time_numeric,
-           color = as.factor(I_frisat)), data = datlong) + geom_boxplot() + theme_bw() + facet_grid(~pdsMF.v1)
+           color = as.factor(I_frisat)), data = datlong) + geom_boxplot() + theme_bw() + facet_grid(~gender.v1)
 ```
 
 # Models 
 ## Total Sleep
 
 ```{r}
-ggplot(aes(x = day, y = act_totsleep.min, group = ID, color = pdsMF.v1), data = datlong %>% filter(pdsMF.v1 %in% c("male","female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~pdsMF.v1)
+ggplot(aes(x = day, y = act_totsleep.min, group = ID, color = gender.v1), data = datlong %>% filter(gender.v1 %in% c("Male","Female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~gender.v1)
 ```
 
 ```{r}
@@ -328,7 +349,7 @@ library(lme4)
 ################################
 #Model 1: COI Total
 ################################
-mod1_totsleep <- lmer(act_totsleep.min ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
+mod1_totsleep <- lmer(act_totsleep.min ~ gender.v1 + age.v1 +  income.v1.10000 + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
 summary(mod1_totsleep)
 ci <- confint(mod1_totsleep)
 print(ci)
@@ -371,7 +392,7 @@ mod1_totsleep_table_re
 ################################
 #Model 2: COI Sub-domains
 ################################
-mod2_totsleep <- lmer(act_totsleep.min ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
+mod2_totsleep <- lmer(act_totsleep.min ~ gender.v1 + age.v1 + income.v1.10000 + cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
 summary(mod2_totsleep)
 ci <- confint(mod2_totsleep)
 
@@ -412,7 +433,7 @@ mod2_totsleep_table_re
 ################################
 #Model 3: COI Sub-domains
 ################################
-mod3_totsleep <- lmer(act_totsleep.min ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat +  z_ED_EC_nat + 
+mod3_totsleep <- lmer(act_totsleep.min ~ gender.v1 + age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat +  z_ED_EC_nat + 
     z_ED_EL_nat + 
     z_ED_ER_nat + 
     z_ED_SP_nat + 
@@ -425,7 +446,7 @@ mod3_totsleep <- lmer(act_totsleep.min ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000
     z_SE_ER_nat + 
     z_SE_HQ_nat + 
     z_SE_SR_nat + 
-    z_SE_WL_nat +  + (1|ID)  , data = datlong)
+    z_SE_WL_nat +  (1|ID)  , data = datlong)
 summary(mod3_totsleep)
 ci <- confint(mod3_totsleep)
 plot(mod3_totsleep, type=c("p","smooth"), col.line=1)
@@ -464,14 +485,55 @@ R2cond <- r.squaredGLMM(mod3_totsleep)[,"R2c"]
 mod3_totsleep_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
 mod3_totsleep_table_re
 ```
+```{r}
+################################
+#Model 4: Neighborhood
+################################
+mod4_totsleep <- lmer(act_totsleep.min ~ gender.v1 + age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat +   +p.mn.cohesion.mean.v1 + p.mn.safety.mean.v1 + p.mn.violence.mean.v1 + (1|ID)  , data = datlong)
+summary(mod4_totsleep)
+ci <- confint(mod4_totsleep)
+plot(mod4_totsleep, type=c("p","smooth"), col.line=1)
 
+plot(mod4_totsleep,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
 
+lattice::qqmath(mod4_totsleep)
+
+#Table
+#Fixed Effects
+mod4_totsleep_table <- data.frame(
+  predictor = attr(summary(mod4_totsleep)$coef,"dimnames")[[1]],
+  B = summary(mod4_totsleep)$coef[,"Estimate"],
+  beta = effectsize::standardize_parameters(mod4_totsleep)$Std_Coefficient,
+  CI = paste0("(",round(ci[-c(1,2),1],4),", ",round(ci[-c(1,2),2],4),")"),
+CI_STD = paste0("(",round(effectsize::standardize_parameters(mod4_totsleep)$CI_low,4),", ",round(effectsize::standardize_parameters(mod4_totsleep)$CI_high,4),")"), 
+pval = summary(mod4_totsleep)$coef[,5]
+)
+
+mod4_totsleep_table[,c("B","beta","pval")] <- 
+round(mod4_totsleep_table[,c("B","beta","pval")],4)
+write.csv(mod4_totsleep_table,file = "../bohnert_sleep_git/mod4_totsleep_table.csv")
+
+#Random effects
+#within
+sigma2 <- summary(mod4_totsleep)$sigma^2
+#between
+tau00 <- attr(summary(mod4_totsleep)$varcor$ID,"stddev")^2
+ICC <- tau00/(tau00 + sigma2)
+N <- summary(mod4_totsleep)$devcomp$dims["q"]
+obs <- summary(mod4_totsleep)$devcomp$dims["n"]
+R2marg <- r.squaredGLMM(mod4_totsleep)[,"R2m"]
+R2cond <- r.squaredGLMM(mod4_totsleep)[,"R2c"]
+mod4_totsleep_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
+mod4_totsleep_table_re
+```
 
 
 ## Sleep Efficiency
 
 ```{r}
-ggplot(aes(x = day, y = act_efficiency, group = ID, color = pdsMF.v1), data = datlong %>% filter(pdsMF.v1 %in% c("male","female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~pdsMF.v1)
+ggplot(aes(x = day, y = act_efficiency, group = ID, color = gender.v1), data = datlong %>% filter(gender.v1 %in% c("Male","Female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~gender.v1)
 ```
 
 ```{r}
@@ -482,7 +544,7 @@ library(lme4)
 ################################
 #Model 1: COI Total
 ################################
-mod1_eff <- lmer(act_efficiency ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
+mod1_eff <- lmer(act_efficiency ~ gender.v1 + age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
 summary(mod1_eff)
 ci <- confint(mod1_eff)
 ci
@@ -526,7 +588,7 @@ mod1_eff_table_re
 ################################
 #Model 2: COI Sub-domains
 ################################
-mod2_eff <- lmer(act_efficiency ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
+mod2_eff <- lmer(act_efficiency ~ gender.v1 + age.v1 + income.v1.10000 + cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
 summary(mod2_eff)
 ci <- confint(mod2_eff)
 ci
@@ -569,7 +631,7 @@ mod2_eff_table_re
 ################################
 #Model 3: COI Sub-domains
 ################################
-mod3_eff <- lmer(act_efficiency ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp +I_frisat+ z_ED_EC_nat + 
+mod3_eff <- lmer(act_efficiency ~ gender.v1 + age.v1 + income.v1.10000 + cg1_edu_grp +I_frisat+ z_ED_EC_nat + 
     z_ED_EL_nat + 
     z_ED_ER_nat + 
     z_ED_SP_nat + 
@@ -621,15 +683,57 @@ R2marg <- r.squaredGLMM(mod3_eff)[,"R2m"]
 R2cond <- r.squaredGLMM(mod3_eff)[,"R2c"]
 mod3_eff_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
 mod3_eff_table_re
-```
 
+################################
+#Model 4: Neighborhood
+################################
+mod4_eff <- lmer(act_efficiency ~ gender.v1 + age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat +   +p.mn.cohesion.mean.v1 + p.mn.safety.mean.v1 + p.mn.violence.mean.v1 + (1|ID)  , data = datlong)
+summary(mod4_eff)
+ci <- confint(mod4_eff)
+ci
+plot(mod4_eff, type=c("p","smooth"), col.line=1)
+
+plot(mod4_eff,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod4_eff)
+
+#Table
+#Fixed Effects
+mod4_eff_table <- data.frame(
+  predictor = attr(summary(mod4_eff)$coef,"dimnames")[[1]],
+  B = summary(mod4_eff)$coef[,"Estimate"],
+  beta = effectsize::standardize_parameters(mod4_eff)$Std_Coefficient,
+  CI = paste0("(",round(ci[-c(1,2),1],4),", ",round(ci[-c(1,2),2],4),")"),
+CI_STD = paste0("(",round(effectsize::standardize_parameters(mod4_eff)$CI_low,4),", ",round(effectsize::standardize_parameters(mod4_eff)$CI_high,4),")"), 
+pval = summary(mod4_eff)$coef[,5]
+)
+
+mod4_eff_table[,c("B","beta","pval")] <- 
+round(mod4_eff_table[,c("B","beta","pval")],4)
+write.csv(mod4_eff_table,file = "../bohnert_sleep_git/mod4_eff_table.csv")
+
+#Random effects
+#within
+sigma2 <- summary(mod4_eff)$sigma^2
+#between
+tau00 <- attr(summary(mod4_eff)$varcor$ID,"stddev")^2
+ICC <- tau00/(tau00 + sigma2)
+N <- summary(mod4_eff)$devcomp$dims["q"]
+obs <- summary(mod4_eff)$devcomp$dims["n"]
+R2marg <- r.squaredGLMM(mod4_eff)[,"R2m"]
+R2cond <- r.squaredGLMM(mod4_eff)[,"R2c"]
+mod4_eff_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
+mod4_eff_table_re
+```
 
 ## Awakening
 
 There are some classic violations of the constant variance assumption here.  So I took a log transformation (plus 1 to prevent log(0)) of the awakening variable and this alleviates much of the problem.  
 
 ```{r}
-ggplot(aes(x = day, y = act_awakening.min, group = ID, color = pdsMF.v1), data = datlong %>% filter(pdsMF.v1 %in% c("male","female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~pdsMF.v1)
+ggplot(aes(x = day, y = act_awakening.min, group = ID, color = gender.v1), data = datlong %>% filter(gender.v1 %in% c("Male","Female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~gender.v1)
 ```
 
 ```{r}
@@ -640,7 +744,7 @@ library(lme4)
 ################################
 #Model 1: COI Total
 ################################
-mod1_awake <- lmer(log(act_awakening.min + 1) ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
+mod1_awake <- lmer(log(act_awakening.min + 1) ~ gender.v1 + age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
 summary(mod1_awake)
 ci <- confint(mod1_awake)
 ci
@@ -684,7 +788,7 @@ mod1_awake_table_re
 ################################
 #Model 2: COI Sub-domains
 ################################
-mod2_awake <- lmer(log(act_awakening.min + 1) ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
+mod2_awake <- lmer(log(act_awakening.min + 1) ~ gender.v1 + age.v1 + income.v1.10000 + cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
 summary(mod2_awake)
 ci <- confint(mod2_awake)
 ci
@@ -729,7 +833,7 @@ mod2_awake_table_re
 ################################
 #Model 3: COI Sub-domains
 ################################
-mod3_awake <- lmer(log(act_awakening.min + 1) ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat +  z_ED_EC_nat + 
+mod3_awake <- lmer(log(act_awakening.min + 1) ~ gender.v1 + age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat +  z_ED_EC_nat + 
     z_ED_EL_nat + 
     z_ED_ER_nat + 
     z_ED_SP_nat + 
@@ -782,11 +886,56 @@ R2marg <- r.squaredGLMM(mod3_awake)[,"R2m"]
 R2cond <- r.squaredGLMM(mod3_awake)[,"R2c"]
 mod3_awake_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
 mod3_awake_table_re
+
+
+################################
+#Model 4: Neighborhood
+################################
+mod4_awake <- lmer(act_awakening.min ~ gender.v1 + age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat +   +p.mn.cohesion.mean.v1 + p.mn.safety.mean.v1 + p.mn.violence.mean.v1 + (1|ID)  , data = datlong)
+summary(mod4_awake)
+ci <- confint(mod4_awake)
+ci
+plot(mod4_awake, type=c("p","smooth"), col.line=1)
+
+plot(mod4_awake,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod4_awake)
+
+#Table
+#Fixed Effects
+mod4_awake_table <- data.frame(
+  predictor = attr(summary(mod4_awake)$coef,"dimnames")[[1]],
+  B = summary(mod4_awake)$coef[,"Estimate"],
+  beta = effectsize::standardize_parameters(mod4_awake)$Std_Coefficient,
+  CI = paste0("(",round(ci[-c(1,2),1],4),", ",round(ci[-c(1,2),2],4),")"),
+CI_STD = paste0("(",round(effectsize::standardize_parameters(mod4_awake)$CI_low,4),", ",round(effectsize::standardize_parameters(mod4_awake)$CI_high,4),")"), 
+pval = summary(mod4_awake)$coef[,5]
+)
+
+mod4_awake_table[,c("B","beta","pval")] <- 
+round(mod4_awake_table[,c("B","beta","pval")],4)
+write.csv(mod4_awake_table,file = "../bohnert_sleep_git/mod4_awake_table.csv")
+
+#Random effects
+#within
+sigma2 <- summary(mod4_awake)$sigma^2
+#between
+tau00 <- attr(summary(mod4_awake)$varcor$ID,"stddev")^2
+ICC <- tau00/(tau00 + sigma2)
+N <- summary(mod4_awake)$devcomp$dims["q"]
+obs <- summary(mod4_awake)$devcomp$dims["n"]
+R2marg <- r.squaredGLMM(mod4_awake)[,"R2m"]
+R2cond <- r.squaredGLMM(mod4_awake)[,"R2c"]
+mod4_awake_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
+mod4_awake_table_re
+
 ```
 
 ## Sleep Onset 
 ```{r}
-ggplot(aes(x = day, y = act_onset.time_numeric, group = ID, color = pdsMF.v1), data = datlong %>% filter(pdsMF.v1 %in% c("male","female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~pdsMF.v1)
+ggplot(aes(x = day, y = act_onset.time_numeric, group = ID, color = gender.v1), data = datlong %>% filter(gender.v1 %in% c("Male","Female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~gender.v1)
 ```
 
 ```{r}
@@ -797,7 +946,8 @@ library(lme4)
 ################################
 #Model 1: COI Total
 ################################
-mod1_onset <- lmer(act_onset.time_numeric ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
+mod1_onset <- lmer(act_onset.time_numeric ~ gender.v1 + age.v1 +  income.v1.10000 + 
+cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
 summary(mod1_onset)
 ci <- confint(mod1_onset)
 ci
@@ -842,7 +992,8 @@ mod1_onset_table_re
 ################################
 #Model 2: COI Sub-domains
 ################################
-mod2_onset <- lmer(act_onset.time_numeric ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
+mod2_onset <- lmer(act_onset.time_numeric ~ gender.v1 + age.v1 + income.v1.10000 +
+cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
 summary(mod2_onset)
 ci <- confint(mod2_onset)
 ci 
@@ -885,7 +1036,8 @@ mod2_onset_table_re
 ################################
 #Model 3: COI Sub-domains
 ################################
-mod3_onset <- lmer(act_onset.time_numeric ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat +  z_ED_EC_nat + 
+mod3_onset <- lmer(act_onset.time_numeric ~ gender.v1 + age.v1 + income.v1.10000 + 
+cg1_edu_grp + I_frisat +  z_ED_EC_nat + 
     z_ED_EL_nat + 
     z_ED_ER_nat + 
     z_ED_SP_nat + 
@@ -937,12 +1089,57 @@ R2marg <- r.squaredGLMM(mod3_onset)[,"R2m"]
 R2cond <- r.squaredGLMM(mod3_onset)[,"R2c"]
 mod3_onset_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
 mod3_onset_table_re
+
+################################
+#Model 4: Neighborhood
+################################
+mod4_onset <- lmer(act_onset.time_numeric ~ gender.v1 + age.v1 + income.v1.10000 +
+cg1_edu_grp + I_frisat +   
+  p.mn.cohesion.mean.v1 + p.mn.safety.mean.v1 + p.mn.violence.mean.v1 + (1|ID)  , data = datlong)
+summary(mod4_onset)
+ci <- confint(mod4_onset)
+ci
+plot(mod4_onset, type=c("p","smooth"), col.line=1)
+
+plot(mod4_onset,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod4_onset)
+
+#Table
+#Fixed Effects
+mod4_onset_table <- data.frame(
+  predictor = attr(summary(mod4_onset)$coef,"dimnames")[[1]],
+  B = summary(mod4_onset)$coef[,"Estimate"],
+  beta = effectsize::standardize_parameters(mod4_onset)$Std_Coefficient,
+  CI = paste0("(",round(ci[-c(1,2),1],4),", ",round(ci[-c(1,2),2],4),")"),
+CI_STD = paste0("(",round(effectsize::standardize_parameters(mod4_onset)$CI_low,4),", ",round(effectsize::standardize_parameters(mod4_onset)$CI_high,4),")"), 
+pval = summary(mod4_onset)$coef[,5]
+)
+
+mod4_onset_table[,c("B","beta","pval")] <- 
+round(mod4_onset_table[,c("B","beta","pval")],4)
+write.csv(mod4_onset_table,file = "../bohnert_sleep_git/mod4_onset_table.csv")
+
+#Random effects
+#within
+sigma2 <- summary(mod4_onset)$sigma^2
+#between
+tau00 <- attr(summary(mod4_onset)$varcor$ID,"stddev")^2
+ICC <- tau00/(tau00 + sigma2)
+N <- summary(mod4_onset)$devcomp$dims["q"]
+obs <- summary(mod4_onset)$devcomp$dims["n"]
+R2marg <- r.squaredGLMM(mod4_onset)[,"R2m"]
+R2cond <- r.squaredGLMM(mod4_onset)[,"R2c"]
+mod4_onset_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
+mod4_onset_table_re
 ```
 
 ## Sleep Outbed
 
 ```{r}
-ggplot(aes(x = day, y = act_outbed.time_numeric, group = ID, color = pdsMF.v1), data = datlong %>% filter(pdsMF.v1 %in% c("male","female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~pdsMF.v1)
+ggplot(aes(x = day, y = act_outbed.time_numeric, group = ID, color = gender.v1), data = datlong %>% filter(gender.v1 %in% c("Male","Female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~gender.v1)
 ```
 
 ```{r}
@@ -953,7 +1150,8 @@ library(lme4)
 ################################
 #Model 1: COI Total
 ################################
-mod1_outbed <- lmer(act_outbed.time_numeric ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
+mod1_outbed <- lmer(act_outbed.time_numeric ~ gender.v1 + age.v1 + income.v1.10000 + 
+cg1_edu_grp + I_frisat + z_COI_nat + (1|ID)  , data = datlong)
 summary(mod1_outbed)
 ci <- confint(mod1_outbed)
 ci 
@@ -996,7 +1194,8 @@ mod1_outbed_table_re
 ################################
 #Model 2: COI Sub-domains
 ################################
-mod2_outbed <- lmer(act_outbed.time_numeric ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
+mod2_outbed <- lmer(act_outbed.time_numeric ~ gender.v1 + age.v1 + income.v1.10000 +
+cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
 summary(mod2_outbed)
 ci <- confint(mod2_outbed)
 ci
@@ -1038,7 +1237,8 @@ mod2_outbed_table_re
 ################################
 #Model 3: COI Sub-domains
 ################################
-mod3_outbed <- lmer(act_outbed.time_numeric ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp + I_frisat + z_ED_EC_nat + 
+mod3_outbed <- lmer(act_outbed.time_numeric ~ gender.v1 + age.v1 + income.v1.10000 + 
+cg1_edu_grp + I_frisat + z_ED_EC_nat + 
     z_ED_EL_nat + 
     z_ED_ER_nat + 
     z_ED_SP_nat + 
@@ -1090,19 +1290,55 @@ R2cond <- r.squaredGLMM(mod3_outbed)[,"R2c"]
 mod3_outbed_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
 mod3_outbed_table_re
 
-# ################################
-# #Model 4: Neighborhood Parent Report
-# ################################
-# mod4_outbed <- lmer(act_outbed.time_numeric ~ pdsMF.v1 + cg1.age.v1 + income.v1.10000 + cg1_edu_grp +  + (1|ID)  , data = datlong)
-# summary(mod4_outbed)
-# confint(mod4_outbed)
-# plot(mod4_outbed, type=c("p","smooth"), col.line=1)
-# 
-# plot(mod4_outbed,
-#      sqrt(abs(resid(.)))~fitted(.),
-#      type=c("p","smooth"), col.line=1)
-# 
-# lattice::qqmath(mod4_outbed)
+################################
+#Model 4: Neighborhood
+################################
+mod4_outbed <- lmer(act_outbed.time_numeric ~ gender.v1 + age.v1 + income.v1.10000 +
+cg1_edu_grp + I_frisat + 
+  p.mn.cohesion.mean.v1 +
+  p.mn.safety.mean.v1 +
+  p.mn.violence.mean.v1 + (1|ID)  , data = datlong)
+summary(mod4_outbed)
+ci <- confint(mod4_outbed)
+ci
+plot(mod4_outbed, type=c("p","smooth"), col.line=1)
+
+plot(mod4_outbed,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod4_outbed)
+
+#Table
+#Fixed Effects
+mod4_outbed_table <- data.frame(
+  predictor = attr(summary(mod4_outbed)$coef,"dimnames")[[1]],
+  B = summary(mod4_outbed)$coef[,"Estimate"],
+  beta = effectsize::standardize_parameters(mod4_outbed)$Std_Coefficient,
+  CI = paste0("(",round(ci[-c(1,2),1],4),", ",round(ci[-c(1,2),2],4),")"),
+CI_STD = paste0("(",round(effectsize::standardize_parameters(mod4_outbed)$CI_low,4),", ",round(effectsize::standardize_parameters(mod4_outbed)$CI_high,4),")"), 
+pval = summary(mod4_outbed)$coef[,5]
+)
+
+mod4_outbed_table[,c("B","beta","pval")] <- 
+round(mod4_outbed_table[,c("B","beta","pval")],4)
+write.csv(mod4_outbed_table,file = "../bohnert_sleep_git/mod4_outbed_table.csv")
+
+#Random effects
+#within
+sigma2 <- summary(mod4_outbed)$sigma^2
+#between
+tau00 <- attr(summary(mod4_outbed)$varcor$ID,"stddev")^2
+ICC <- tau00/(tau00 + sigma2)
+N <- summary(mod4_outbed)$devcomp$dims["q"]
+obs <- summary(mod4_outbed)$devcomp$dims["n"]
+R2marg <- r.squaredGLMM(mod4_outbed)[,"R2m"]
+R2cond <- r.squaredGLMM(mod4_outbed)[,"R2c"]
+mod4_outbed_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
+mod4_outbed_table_re
+
+
+#Output the entire image
 save.image("../bohnert_sleep/bohnert_sleep_20250228.rda")
 ```
 
