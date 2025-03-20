@@ -255,7 +255,8 @@ datlong_resp <- dat %>%
     act_onset.time_d0: act_onset.time_d8,
     act_efficiency_d0: act_efficiency_d8,
     act_weekday_yn_d0:act_weekday_yn_d8,
-    act_awakening.min_d0: act_awakening.min_d8) %>%
+    act_awakening.min_d0: act_awakening.min_d8,
+    ) %>%
   pivot_longer(
     cols = -c(ID,
               RecordedDate,
@@ -772,7 +773,7 @@ mod1_awake_table[,c("B","beta","pval")] <-
 round(mod1_awake_table[,c("B","beta","pval")],4)
 write.csv(mod1_awake_table,file = "../bohnert_sleep_git/mod1_awake_table.csv")
 
-#Random awakeects
+#Random effects
 #within
 sigma2 <- summary(mod1_awake)$sigma^2
 #between
@@ -816,7 +817,7 @@ mod2_awake_table[,c("B","beta","pval")] <-
 round(mod2_awake_table[,c("B","beta","pval")],4)
 write.csv(mod2_awake_table,file = "../bohnert_sleep_git/mod2_awake_table.csv")
 
-#Random awakeects
+#Random effects
 #within
 sigma2 <- summary(mod2_awake)$sigma^2
 #between
@@ -874,7 +875,7 @@ mod3_awake_table[,c("B","beta","pval")] <-
 round(mod3_awake_table[,c("B","beta","pval")],4)
 write.csv(mod3_awake_table,file = "../bohnert_sleep_git/mod3_awake_table.csv")
 
-#Random awakeects
+#Random effects
 #within
 sigma2 <- summary(mod3_awake)$sigma^2
 #between
@@ -1339,7 +1340,203 @@ mod4_outbed_table_re
 
 
 #Output the entire image
-save.image("../bohnert_sleep/bohnert_sleep_20250228.rda")
+save.image("../bohnert_sleep/bohnert_sleep_20250303.rda")
 ```
 
+# Weekly Level 
 
+```{r}
+library(lme4)
+################################
+#act_outbed.min_sd
+################################
+dat <- dat %>% mutate(income.v1.10000 = income.v1/10000)
+################################
+#Model 1: COI Total
+################################
+mod1_totsleep_sd <- lm(act_totsleep.min_sd ~ gender.v1 + age.v1 + income.v1.10000 + 
+cg1_edu_grp + z_COI_nat, data = dat)
+summary(mod1_totsleep_sd)
+ci <- confint(mod1_totsleep_sd)
+ci 
+
+plot(mod1_totsleep_sd,1)
+
+
+lattice::qqmath(mod1_outbed)
+
+mod1_outbed_table <- data.frame(
+  predictor = attr(summary(mod1_outbed)$coef,"dimnames")[[1]],
+  B = summary(mod1_outbed)$coef[,"Estimate"],
+  beta = effectsize::standardize_parameters(mod1_outbed)$Std_Coefficient,
+  CI = paste0("(",round(ci[-c(1,2),1],4),", ",round(ci[-c(1,2),2],4),")"),
+CI_STD = paste0("(",round(effectsize::standardize_parameters(mod1_outbed)$CI_low,4),", ",round(effectsize::standardize_parameters(mod1_outbed)$CI_high,4),")"), 
+pval = summary(mod1_outbed)$coef[,5]
+)
+
+mod1_outbed_table[,c("B","beta","pval")] <- 
+round(mod1_outbed_table[,c("B","beta","pval")],4)
+write.csv(mod1_outbed_table,file = "../bohnert_sleep_git/mod1_outbed_table.csv")
+
+#Random effects
+#within
+sigma2 <- summary(mod1_outbed)$sigma^2
+#between
+tau00 <- attr(summary(mod1_outbed)$varcor$ID,"stddev")^2
+ICC <- tau00/(tau00 + sigma2)
+N <- summary(mod1_outbed)$devcomp$dims["q"]
+obs <- summary(mod1_outbed)$devcomp$dims["n"]
+R2marg <- r.squaredGLMM(mod1_outbed)[,"R2m"]
+R2cond <- r.squaredGLMM(mod1_outbed)[,"R2c"]
+mod1_outbed_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
+mod1_outbed_table_re
+
+
+################################
+#Model 2: COI Sub-domains
+################################
+mod2_outbed <- lmer(act_outbed.time_numeric ~ gender.v1 + age.v1 + income.v1.10000 +
+cg1_edu_grp +  I_frisat + z_ED_nat +  z_HE_nat + z_SE_nat + (1|ID)  , data = datlong)
+summary(mod2_outbed)
+ci <- confint(mod2_outbed)
+ci
+
+plot(mod2_outbed, type=c("p","smooth"), col.line=1)
+
+plot(mod2_outbed,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod2_outbed)
+
+
+mod2_outbed_table <- data.frame(
+  predictor = attr(summary(mod2_outbed)$coef,"dimnames")[[1]],
+  B = summary(mod2_outbed)$coef[,"Estimate"],
+  beta = effectsize::standardize_parameters(mod2_outbed)$Std_Coefficient,
+  CI = paste0("(",round(ci[-c(1,2),1],4),", ",round(ci[-c(1,2),2],4),")"),
+CI_STD = paste0("(",round(effectsize::standardize_parameters(mod2_outbed)$CI_low,4),", ",round(effectsize::standardize_parameters(mod2_outbed)$CI_high,4),")"), 
+pval = summary(mod2_outbed)$coef[,5]
+)
+
+mod2_outbed_table[,c("B","beta","pval")] <- 
+round(mod2_outbed_table[,c("B","beta","pval")],4)
+write.csv(mod2_outbed_table,file = "../bohnert_sleep_git/mod2_outbed_table.csv")
+
+#Random effects
+#within
+sigma2 <- summary(mod2_outbed)$sigma^2
+#between
+tau00 <- attr(summary(mod2_outbed)$varcor$ID,"stddev")^2
+ICC <- tau00/(tau00 + sigma2)
+N <- summary(mod2_outbed)$devcomp$dims["q"]
+obs <- summary(mod2_outbed)$devcomp$dims["n"]
+R2marg <- r.squaredGLMM(mod2_outbed)[,"R2m"]
+R2cond <- r.squaredGLMM(mod2_outbed)[,"R2c"]
+mod2_outbed_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
+mod2_outbed_table_re
+################################
+#Model 3: COI Sub-domains
+################################
+mod3_outbed <- lmer(act_outbed.time_numeric ~ gender.v1 + age.v1 + income.v1.10000 + 
+cg1_edu_grp + I_frisat + z_ED_EC_nat + 
+    z_ED_EL_nat + 
+    z_ED_ER_nat + 
+    z_ED_SP_nat + 
+    z_HE_EP_nat + 
+    z_HE_HE_nat + 
+    z_HE_HR_nat + 
+    z_HE_SE_nat + 
+    z_SE_EI_nat + 
+    z_SE_EO_nat + 
+    z_SE_ER_nat + 
+    z_SE_HQ_nat + 
+    z_SE_SR_nat + 
+    z_SE_WL_nat + (1|ID)  , data = datlong)
+summary(mod3_outbed)
+ci <- confint(mod3_outbed)
+ci 
+plot(mod3_outbed, type=c("p","smooth"), col.line=1)
+
+plot(mod3_outbed,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod3_outbed)
+
+
+mod3_outbed_table <- data.frame(
+  predictor = attr(summary(mod3_outbed)$coef,"dimnames")[[1]],
+  B = summary(mod3_outbed)$coef[,"Estimate"],
+  beta = effectsize::standardize_parameters(mod3_outbed)$Std_Coefficient,
+  CI = paste0("(",round(ci[-c(1,2),1],4),", ",round(ci[-c(1,2),2],4),")"),
+CI_STD = paste0("(",round(effectsize::standardize_parameters(mod3_outbed)$CI_low,4),", ",round(effectsize::standardize_parameters(mod3_outbed)$CI_high,4),")"), 
+pval = summary(mod3_outbed)$coef[,5]
+)
+
+mod3_outbed_table[,c("B","beta","pval")] <- 
+round(mod3_outbed_table[,c("B","beta","pval")],4)
+write.csv(mod3_outbed_table,file = "../bohnert_sleep_git/mod3_outbed_table.csv")
+
+#Random effects
+#within
+sigma2 <- summary(mod3_outbed)$sigma^2
+#between
+tau00 <- attr(summary(mod3_outbed)$varcor$ID,"stddev")^2
+ICC <- tau00/(tau00 + sigma2)
+N <- summary(mod3_outbed)$devcomp$dims["q"]
+obs <- summary(mod3_outbed)$devcomp$dims["n"]
+R2marg <- r.squaredGLMM(mod3_outbed)[,"R2m"]
+R2cond <- r.squaredGLMM(mod3_outbed)[,"R2c"]
+mod3_outbed_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
+mod3_outbed_table_re
+
+################################
+#Model 4: Neighborhood
+################################
+mod4_outbed <- lmer(act_outbed.time_numeric ~ gender.v1 + age.v1 + income.v1.10000 +
+cg1_edu_grp + I_frisat + 
+  p.mn.cohesion.mean.v1 +
+  p.mn.safety.mean.v1 +
+  p.mn.violence.mean.v1 + (1|ID)  , data = datlong)
+summary(mod4_outbed)
+ci <- confint(mod4_outbed)
+ci
+plot(mod4_outbed, type=c("p","smooth"), col.line=1)
+
+plot(mod4_outbed,
+     sqrt(abs(resid(.)))~fitted(.),
+     type=c("p","smooth"), col.line=1)
+
+lattice::qqmath(mod4_outbed)
+
+#Table
+#Fixed Effects
+mod4_outbed_table <- data.frame(
+  predictor = attr(summary(mod4_outbed)$coef,"dimnames")[[1]],
+  B = summary(mod4_outbed)$coef[,"Estimate"],
+  beta = effectsize::standardize_parameters(mod4_outbed)$Std_Coefficient,
+  CI = paste0("(",round(ci[-c(1,2),1],4),", ",round(ci[-c(1,2),2],4),")"),
+CI_STD = paste0("(",round(effectsize::standardize_parameters(mod4_outbed)$CI_low,4),", ",round(effectsize::standardize_parameters(mod4_outbed)$CI_high,4),")"), 
+pval = summary(mod4_outbed)$coef[,5]
+)
+
+mod4_outbed_table[,c("B","beta","pval")] <- 
+round(mod4_outbed_table[,c("B","beta","pval")],4)
+write.csv(mod4_outbed_table,file = "../bohnert_sleep_git/mod4_outbed_table.csv")
+
+#Random effects
+#within
+sigma2 <- summary(mod4_outbed)$sigma^2
+#between
+tau00 <- attr(summary(mod4_outbed)$varcor$ID,"stddev")^2
+ICC <- tau00/(tau00 + sigma2)
+N <- summary(mod4_outbed)$devcomp$dims["q"]
+obs <- summary(mod4_outbed)$devcomp$dims["n"]
+R2marg <- r.squaredGLMM(mod4_outbed)[,"R2m"]
+R2cond <- r.squaredGLMM(mod4_outbed)[,"R2c"]
+mod4_outbed_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
+mod4_outbed_table_re
+
+
+```
