@@ -342,7 +342,73 @@ ggplot(aes(y = act_outbed.time_numeric,
 
 ```{r}
 library(gt)
-#I lose an observation because it was missing gender.  So I havew 323. 
+#I lose an observation because it was missing gender.  So I havew 323.
+rbind(
+dat %>% filter(!is.na(gender.v1)) %>% group_by(gender.v1) %>% summarize(
+  n = n(),
+  mean = mean(act_onset.time.min_sd, na.rm = TRUE)/60,
+  sd = sd(act_onset.time.min_sd, na.rm = TRUE)/60
+) %>% mutate(mean = paste0(mean %/% 1,
+      ":",
+      sprintf("%02d", (round(60 * (
+        mean %% 1
+      ))))),
+      sd = paste0(sd %/% 1,
+      ":",
+      sprintf("%02d", (round(60 * (
+        sd %% 1
+      )))))) , 
+
+
+dat %>% filter(!is.na(gender.v1))  %>% summarize(
+  gender.v1 = "All", 
+  n = n(),
+  mean = mean(act_onset.time.min_sd, na.rm = TRUE)/60,
+  sd = sd(act_onset.time.min_sd, na.rm = TRUE)/60
+) %>% mutate(mean = paste0(mean %/% 1,
+      ":",
+      sprintf("%02d", (round(60 * (
+        mean %% 1
+      ))))),
+      sd = paste0(sd %/% 1,
+      ":",
+      sprintf("%02d", (round(60 * (
+        sd %% 1
+      ))))))  ) %>% write.csv("./table1_onset_sd.csv", row.names = FALSE)
+
+rbind(
+dat %>% filter(!is.na(gender.v1)) %>% group_by(gender.v1) %>% summarize(
+  n = n(),
+  mean = mean(act_outbed.time.min_sd, na.rm = TRUE)/60,
+  sd = sd(act_outbed.time.min_sd, na.rm = TRUE)/60
+) %>% mutate(mean = paste0(mean %/% 1,
+      ":",
+      sprintf("%02d", (round(60 * (
+        mean %% 1
+      ))))),
+      sd = paste0(sd %/% 1,
+      ":",
+      sprintf("%02d", (round(60 * (
+        sd %% 1
+      )))))) , 
+
+
+dat %>% filter(!is.na(gender.v1))  %>% summarize(
+  gender.v1 = "All", 
+  n = n(),
+  mean = mean(act_outbed.time.min_sd, na.rm = TRUE)/60,
+  sd = sd(act_outbed.time.min_sd, na.rm = TRUE)/60
+) %>% mutate(mean = paste0(mean %/% 1,
+      ":",
+      sprintf("%02d", (round(60 * (
+        mean %% 1
+      ))))),
+      sd = paste0(sd %/% 1,
+      ":",
+      sprintf("%02d", (round(60 * (
+        sd %% 1
+      ))))))  ) %>% write.csv("./table1_outbed_sd.csv", row.names = FALSE)
+
 datlong %>% group_by(ID) %>% summarize(n = sum(!is.na(act_efficiency)))  %>% nrow()
 
 #
@@ -441,7 +507,59 @@ rbind(datlong %>% group_by(gender.v1, I_frisat, ID) %>% summarize(
       ))),
       ")"
     )) , 
-
+datlong %>% group_by(I_frisat, ID) %>% summarize(
+  n = n(),
+  act_totsleep.min = mean(act_totsleep.min, na.rm = TRUE),
+  act_efficiency = mean(act_efficiency, na.rm = TRUE),
+  act_awakening.min = mean(act_awakening.min, na.rm = TRUE),
+  act_outbed.time_numeric = mean(act_outbed.time_numeric, na.rm = TRUE),
+  act_onset.time_numeric = mean(act_onset.time_numeric, na.rm = TRUE)
+) %>%  group_by(I_frisat) %>%
+  summarize(gender.v1 = "All",
+            n = sum(n),
+            act_totsleep.min = paste0(round(mean(
+              act_totsleep.min, na.rm = TRUE
+            ), 2), " (", round(sd(
+              act_totsleep.min, na.rm = TRUE
+            ), 2), ")"),
+            act_efficiency = paste0(round(mean(
+              act_efficiency, na.rm = TRUE
+            ), 2), " (", round(sd(
+              act_efficiency, na.rm = TRUE
+            ), 2), ")"),
+            act_awakening.min = paste0(round(mean(
+              act_awakening.min, na.rm = TRUE
+            ), 2), " (", round(sd(
+              act_awakening.min, na.rm = TRUE
+            ), 2), ")"),
+            act_onset.time_numeric = paste0(
+              mean(act_onset.time_numeric, na.rm = TRUE) %/% 1,
+              ":",
+              sprintf("%02d", (round(60 * (
+                mean(act_onset.time_numeric, na.rm = TRUE) %% 1
+              )))),
+              " (",
+              sd(act_onset.time_numeric, na.rm = TRUE) %/% 1,
+              ":",
+              sprintf("%02d", round(60 * (
+                sd(act_onset.time_numeric, na.rm = TRUE) %% 1
+              ))),
+              ")"
+            ),
+            act_outbed.time_numeric = paste0(
+              mean(act_outbed.time_numeric, na.rm = TRUE) %/% 1,
+              ":",
+              sprintf("%02d", (round(60 * (
+                mean(act_outbed.time_numeric, na.rm = TRUE) %% 1
+              )))),
+              " (",
+              sd(act_outbed.time_numeric, na.rm = TRUE) %/% 1,
+              ":",
+              sprintf("%02d", round(60 * (
+                sd(act_outbed.time_numeric, na.rm = TRUE) %% 1
+              ))),
+              ")"
+            )) %>% select(gender.v1, I_frisat,n,act_totsleep.min, act_efficiency,act_awakening.min,act_onset.time_numeric,act_outbed.time_numeric),
 datlong %>% group_by(gender.v1, ID) %>% summarize(
   n = n(),
   act_totsleep.min = mean(act_totsleep.min, na.rm = TRUE),
@@ -557,6 +675,8 @@ datlong %>% group_by(ID) %>% summarize(
 #act.outbed.time
 #act.onset.time
 #gender.v1 + age.v1 +  income.v1.10000 + cg1_edu_grp + I_frisat
+
+Table 1 stuff ith trhe sd varabiles.  Sleep onset and sleep offset. 
 ```
 
 ```{r}
@@ -1578,7 +1698,7 @@ iccmat <- matrix(iccvec, ncol = 4, byrow = T)
 row.names(iccmat) <- c("Total Sleep","Efficiency","Awakening","Awake","Inbed")
 colnames(iccmat) <- paste0("Model ",1:4)
 iccmat
-write.csv(iccmat,file = "../iccmatrix.csv", row.names = FALSE)
+write.csv(round(iccmat,3),file = "/Users/gregorymatthews/Dropbox/bohnert_sleep_git/iccmatrix.csv")
 ```
 
 # Weekly Level 
