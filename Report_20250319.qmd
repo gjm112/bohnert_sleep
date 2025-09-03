@@ -4,7 +4,6 @@ format: pdf
 editor: visual
 ---
 
-
 ```{r}
 #Description of the models is here:
 #https://docs.google.com/document/d/1wPBOgAGN5HowoabC0F4LSJFSpuju6Igh/edit
@@ -64,8 +63,8 @@ dat <- dat %>% mutate(COMMAREA = ifelse(is.na(COMMAREA),0,COMMAREA))
 table(dat$COMMAREA)
 sum(is.na(dat$COMMAREA))
 ```
-# Data Cleaning and EDA
 
+# Data Cleaning and EDA
 
 ```{r}
 dat <- dat %>% left_join(dat_neigh, by = "ID")
@@ -79,8 +78,7 @@ dat <- dat %>% mutate(
 
 ```
 
-
-##  Summary stats
+## Summary stats
 
 ```{r}
 dat %>% summarize(
@@ -336,7 +334,6 @@ ggplot(aes(y = act_onset.time_numeric,
 ggplot(aes(y = act_outbed.time_numeric,
            color = as.factor(I_frisat)), data = datlong) + geom_boxplot() + theme_bw() + facet_grid(~gender.v1)
 ```
-
 
 # Table 1 stuff
 
@@ -683,7 +680,8 @@ Table 1 stuff ith trhe sd varabiles.  Sleep onset and sleep offset.
 iccvec <- c()
 ```
 
-# Models 
+# Models
+
 ## Total Sleep
 
 ```{r}
@@ -779,6 +777,10 @@ R2marg <- r.squaredGLMM(mod2_totsleep)[,"R2m"]
 R2cond <- r.squaredGLMM(mod2_totsleep)[,"R2c"]
 mod2_totsleep_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
 mod2_totsleep_table_re
+
+library(car)
+library(GGally)
+vif(mod2_totsleep)
 ################################
 #Model 3: COI Sub-domains
 ################################
@@ -833,7 +835,16 @@ R2marg <- r.squaredGLMM(mod3_totsleep)[,"R2m"]
 R2cond <- r.squaredGLMM(mod3_totsleep)[,"R2c"]
 mod3_totsleep_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
 mod3_totsleep_table_re
+
+####################
+#Checking vif
+####################
+library(car)
+library(GGally)
+vif(mod3_totsleep)
+datlong  %>% select(z_ED_EC_nat:z_SE_WL_nat ) %>% ggcorr(label = TRUE)
 ```
+
 ```{r}
 ################################
 #Model 4: Neighborhood
@@ -877,7 +888,6 @@ R2cond <- r.squaredGLMM(mod4_totsleep)[,"R2c"]
 mod4_totsleep_table_re <- data.frame(sigma2, tau00, ICC, N, obs, R2marg, R2cond)
 mod4_totsleep_table_re
 ```
-
 
 ## Sleep Efficiency
 
@@ -1079,7 +1089,7 @@ mod4_eff_table_re
 
 ## Awakening
 
-There are some classic violations of the constant variance assumption here.  So I took a log transformation (plus 1 to prevent log(0)) of the awakening variable and this alleviates much of the problem.  
+There are some classic violations of the constant variance assumption here. So I took a log transformation (plus 1 to prevent log(0)) of the awakening variable and this alleviates much of the problem.
 
 ```{r}
 ggplot(aes(x = day, y = act_awakening.min, group = ID, color = gender.v1), data = datlong %>% filter(gender.v1 %in% c("Male","Female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~gender.v1)
@@ -1282,7 +1292,8 @@ mod4_awake_table_re
 
 ```
 
-## Sleep Onset 
+## Sleep Onset
+
 ```{r}
 ggplot(aes(x = day, y = act_onset.time_numeric, group = ID, color = gender.v1), data = datlong %>% filter(gender.v1 %in% c("Male","Female"))) + geom_line(alpha = 0.05)  + theme_bw() + facet_grid(~gender.v1)
 ```
@@ -1701,7 +1712,7 @@ iccmat
 write.csv(round(iccmat,3),file = "/Users/gregorymatthews/Dropbox/bohnert_sleep_git/iccmatrix.csv")
 ```
 
-# Weekly Level 
+# Weekly Level
 
 ```{r}
 library(lme4)
@@ -1790,7 +1801,6 @@ plot(mod4_totsleep_sd,5)
 effectsize::standardize_parameters(mod4_totsleep_sd)
 ```
 
-
 ```{r}
 library(lme4)
 ################################
@@ -1877,9 +1887,6 @@ plot(mod4_outbed_sd,5)
 
 effectsize::standardize_parameters(mod4_outbed_sd)
 ```
-
-
-
 
 ```{r}
 library(lme4)
